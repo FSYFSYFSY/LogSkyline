@@ -1,0 +1,41 @@
+# ===== Unreal Engine 生成物（可由编辑器/UBT 重新生成）=====
+Binaries/
+Intermediate/
+DerivedDataCache/
+Saved/
+.vs/
+.vscode/
+.idea/
+
+# ===== IDE 与构建生成的工程文件 =====
+*.sln
+*.slnx
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+*.VC.db
+*.VC.opendb
+*.opensdf
+*.sdf
+*.obj
+*.pdb
+*.ilk
+*.exp
+*.lib
+*.dll
+*.exe
+*.tlog
+*.lastbuildstate
+UpgradeLog.htm
+
+# ===== 日志、临时文件、系统文件 =====
+*.log
+*.tmp
+*.bak
+Thumbs.db
+desktop.ini
+.DS_Store
+
+# ===== 本地工具数据（含本机路径，不建议推到公开仓库）=====
+.workbuddy/
