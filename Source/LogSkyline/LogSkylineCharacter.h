@@ -50,11 +50,14 @@ protected:
 	UPROPERTY(EditAnywhere, Category="Input")
 	UInputAction* MouseLookAction;
 
-	UPROPERTY(EditAnywhere, Category = "Input")
+	UPROPERTY(EditDefaultsOnly, Category = "Combat|Input")
 	UInputAction* AttackAction;
 
-	UPROPERTY(EditAnywhere, Category = "Input")
+	UPROPERTY(EditDefaultsOnly, Category = "Combat|Animation")
 	UAnimMontage* AttackMontage;
+
+	/** 是否正在播放攻击蒙太奇，防止连按打断当前动作（普通 C++ 成员，不需要 UPROPERTY） */
+	bool bIsAttacking = false;
 
 public:
 
@@ -74,8 +77,13 @@ protected:
 	/** Called for looking input */
 	void Look(const FInputActionValue& Value);
 
-	/** Called when the attack input is pressed */
+	/** Called when the attack input is pressed. Blueprint / UI 也能直接调用 */
+	UFUNCTION(BlueprintCallable, Category="Combat")
 	void DoAttack();
+
+	/** 攻击开始时交给蓝图做表现（音效 / 特效）。C++ 只负责触发，不写实现 */
+	UFUNCTION(BlueprintImplementableEvent, Category="Combat", meta=(DisplayName="On Attack Started"))
+	void BP_OnAttackStarted();
 
 
 public:

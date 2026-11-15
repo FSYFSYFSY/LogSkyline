@@ -145,8 +145,42 @@ void ALogSkylineCharacter::DoJumpEnd()
 
 void ALogSkylineCharacter::DoAttack()
 {
-	if (UAnimInstance* AnimInstance = GetMesh()->GetAnimInstance())
+	// 1) 状态守卫：上一次攻击还没结束，直接忽略这次输入
+	if (bIsAttacking)
 	{
-		AnimInstance->Montage_Play(AttackMontage);
+		return;
 	}
+
+	// 2) 资源守卫：IsValid 同时挡住空指针和 pending-kill 对象
+	if (!IsValid(AttackMontage))
+	{
+		UE_LOG(LogLogSkyline, Warning, TEXT("Dummy: AttackMontage 未指定"));
+		return;
+	}
+
+	UAnimInstance* AnimInstance = GetMesh()->GetAnimInstance();
+	if (!IsValid(AnimInstance))
+	{
+		return;
+	}
+
+	// 3) Montage_Play 返回实际播放时长；返回 0 表示播放失败
+	const float Duration = AnimInstance->Montage_Play(AttackMontage);
+	if (Duration <= 0.f)
+	{
+		return;
+	}
+
+	bIsAttacking = true;
+
+	// 4) 表现交给蓝图：C++ 只触发事件，蓝图实现音效 / 特效（未实现时为空操作）
+	BP_OnAttackStarted();
+
+	// 5) 蒙太奇播完或被中断时自动解锁，不用 Tick、不用定时器
+	FOnMontageEnded EndDelegate;
+	EndDelegate.BindLambda([this](UAnimMontage*, bool)
+	{
+		bIsAttacking = false;
+	});
+	AnimInstance->Montage_SetEndDelegate(EndDelegate, AttackMontage);
 }
