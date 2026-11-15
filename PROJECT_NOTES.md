@@ -2,7 +2,7 @@
 
 > **给接手的 AI：请直接读取本文件作为上下文起点**，不需要翻历史对话。
 > 更细的逐日排障日志在 `.workbuddy/memory/2026-11-08.md`、`2026-11-14.md`、`2026-11-15.md`。
-> 最后更新：2026-11-15 16:16 (GMT+8)
+> 最后更新：2026-11-15 16:54 (GMT+8)
 
 ## 0. 用户与协作方式（先读这段）
 
@@ -18,8 +18,8 @@
 | 项目根 | `D:\LogSkyline\LogSkyline` |
 | 引擎 | `D:\UE_5.8`，**手动安装的 Installed Build**（注册表未登记 5.8） |
 | 模板 | UE 5.8 Third Person，含 `Variant_Combat` / `Variant_Platforming` / `Variant_SideScrolling` |
-| uproject | `LogSkyline.uproject`，`EngineAssociation` 已被 UE 改成 `"5.8"`（未提交改动） |
-| Git | `FSYFSYFSY/LogSkyline`，分支 `FSY_tut`，HEAD `aca568d`；`origin` 官方、`mirror` 为 ghproxy 部分克隆源 |
+| uproject | `LogSkyline.uproject`，`EngineAssociation` 已被 UE 改成 `"5.8"`（已随 `07ec343` 提交） |
+| Git | `FSYFSYFSY/LogSkyline`，分支 `FSY_tut`（HEAD 以 `git log -1` 为准；`07ec343` 为攻击重构 + 文档首次入库）；`origin` fetch = 官方 HTTPS、push = SSH；`mirror` = ghproxy 镜像，且为 `FSY_tut` 上游 |
 | IDE | VS2026 Community (18.0) |
 
 ## 2. 环境坑与速查命令
@@ -43,12 +43,13 @@
 
 ## 3. 当前代码状态
 
-- `FSY_tut` 比 main 多两个提交，实现了蹲下与攻击：
+- `FSY_tut` 相对 main（`dffd59c`）的主要代码提交（文档维护提交略；完整列表用 `git log --oneline`）：
   - `02724ae` 攻击：C++ 加 `AttackAction` / `AttackMontage` 两个 `UPROPERTY`；`SetupPlayerInputComponent` 里 `BindAction(AttackAction, Started, &DoAttack)`（`.cpp:77`）；`DoAttack()` → `Montage_Play`。
   - `aca568d` 蹲下：C++ 构造函数开 `bCanCrouch`、`CrouchedHalfHeight=40`、`MaxWalkSpeedCrouched=150`；蓝图 `IA_Crouch` 事件节点 → `Crouch()/UnCrouch()`。
+  - `07ec343` 攻击逻辑重构：`bIsAttacking` 状态守卫与蒙太奇结束委托、`DoAttack()` 加 `BlueprintCallable`、`BP_OnAttackStarted` 钩子；`DummyCharacter` 与 `PROJECT_NOTES.md` 首次入库。
 - 资产：`Content/Myplayer/` 有 `BP_MyplayerCharacter`、`BP_MyplayerGameMode`、`IA_Crouch`、`AM_MyComboAttack`。后者与模板 `Variant_Combat/Anims/AM_ComboAttack` 几乎一致（同 `MM_Attack_01/02/03` + `SK_Mannequin`），内含 `AnimNotify_DoAttackTrace` 与 `AnimNotify_CheckCombo`；`IMC_Default` 已加 `IA_Crouch` + `IA_ComboAttack`。
 - 蓝图 `Touch Input for First Person Movement` 是 `EdGraphNode_Comment` 注释框，内容为**移动端触控编排**（`BPI_TouchInterface_C` 虚拟摇杆）：`Touch Jump Start/End`、`CallFunc_DoMove_*`/`DoLook_*`、`DoJumpStart/End`、`Crouch/UnCrouch`。蓝图里唯一的 EnhancedInput 事件节点是 `InpActEvt_IA_Crouch_...`；**PC 键鼠 5 个输入全绑在 C++**。
-- 自建练习文件 `Source/LogSkyline/DummyCharacter.h/.cpp`（未跟踪），与主线独立，暂不用管。
+- 自建练习文件 `Source/LogSkyline/DummyCharacter.h/.cpp`（已随 `07ec343` 纳入版本管理），与主线独立，暂不用管。
 
 ## 4. 教学进度（接手从这里继续）
 
@@ -60,7 +61,7 @@
   - **DLL = 16:16 / 796160 B**（旧 00:17 / 793600 B），PDB 69 MB；`grep -a` 已确认含 `Combat|Input`、`Combat|Animation`、`BP_OnAttackStarted`、`On Attack Started`、`DoAttack`、`AttackAction`、`AttackMontage` → 反射结构已进引擎。UBT `Result: Succeeded`。
   - 编译途中两个坑（详见 §2）：16:03 VS F7 被 Live Coding 互斥锁拦下（UHT 跑了但没链接）；16:14 命令行编译被 UBA 权限问题搞坏 DLL/PDB/lib，**清理 0 字节产物后加 `-NoUBA` 重编成功**。
   - 待用户验证：蓝图事件图表右键搜到 `Do Attack`；PIE 连按攻击不重播；清空 `AttackMontage` 后按攻击 Output Log 出现 `Dummy: AttackMontage 未指定`。
-  - 还原注意：`git checkout -- Source/LogSkyline/LogSkylineCharacter.h Source/LogSkyline/LogSkylineCharacter.cpp` 会**同时撤销第 2 步与 13:54 结构改造**（两者都未提交）；只想撤结构改造需手动删除新增行，**撤完必须重新编译**（`-NoUBA` 增量编译只需数秒）。
+  - 还原注意：第 2 步与 13:54 结构改造已随 `07ec343` 提交，`git checkout -- Source/LogSkyline/LogSkylineCharacter.h Source/LogSkyline/LogSkylineCharacter.cpp` 现在只能回到**该提交的版本**（仍含改造），**不再能撤销改造**。若要取回改造前的代码：`git checkout aca568d -- Source/LogSkyline/LogSkylineCharacter.h Source/LogSkyline/LogSkylineCharacter.cpp`（会形成未提交改动，需自行决定是否提交）；**改完必须重新编译**（`-NoUBA` 增量编译只需数秒）。
 - ✅ **13:54 结构改造第 1 步（C++ 侧一次改完，已随 16:16 编译生效）**：① `AttackAction` → `UPROPERTY(EditDefaultsOnly, Category="Combat|Input")`、`AttackMontage` → `Category="Combat|Animation"`（收紧为类默认值可配）；② 新增 `UFUNCTION(BlueprintImplementableEvent, Category="Combat", meta=(DisplayName="On Attack Started")) void BP_OnAttackStarted();`（**C++ 只触发，禁止在 .cpp 写函数体**，UHT 生成 thunk）；③ `DoAttack()` 在 `bIsAttacking = true` 后调用它，结束委托逻辑顺延为第 5 步。
   - 意图：补齐「表现反馈」层与「编辑器可配」命名规范，让 C++ 侧结构一次性到位，只编译/重启一次。**此钩子非功能必需**（用户 16:10 明确觉得绕，已解释可随时删除，删掉不影响第 3 步）。
   - 后续步骤：**第 2 步** 重开 `.uproject` 后四验证点（Combat 分类、右键有 `Do Attack`、蓝图「添加事件 → On Attack Started」、接 Print String 后 PIE 出现文字）；**第 3 步** 蓝图加 `Touch Attack` 额外触发源 → `Do Attack`、把 Print String 换成音效/特效（不需再编译 C++）。
@@ -82,9 +83,9 @@
 
 ## 6. 工作区状态与还原
 
-- 常见 `git status`：`M LogSkyline.uproject`、`M Content/Myplayer/BP_MyplayerCharacter.uasset`、`M Source/LogSkyline/LogSkylineCharacter.h/.cpp`；未跟踪 `.claudiaideconfig`、`DummyCharacter.h/.cpp`。
+- 常见 `git status`（`07ec343` 推送后）：工作区干净，仅 `?? .claudiaideconfig`（VS 插件的本地配置，含本机私有路径，刻意不入库）。
 - 原 `.sln` / `.slnx` 备份在 `%TEMP%\LogSkyline.sln.bak-20261114` / `.slnx.bak-20261114`；去掉 `-NoPrograms` 重跑 UBT 可还原完整方案。
-- 本文件是**本地未跟踪文件**：`git pull` 不会动它；但 `git clean -fdx` 会删。若希望另一台机器也拿到，需要 `git add` + `commit` + `push`。
+- 本文件自 `07ec343` 起**已被 Git 跟踪并推送到公开仓库**：`git pull` 会更新它，`git clean -fdx` 不会删除被跟踪文件；另一台机器 clone 后即可读到。仓库为 public，内容（本机路径、学习偏好、排障细节）对外可见，且已留在该提交的历史中。
 
 ## 7. 给接手会话的操作提示
 
