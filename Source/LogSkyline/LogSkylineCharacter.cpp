@@ -148,6 +148,7 @@ void ALogSkylineCharacter::DoAttack()
 	// 1) 状态守卫：上一次攻击还没结束，直接忽略这次输入
 	if (bIsAttacking)
 	{
+		CachedAttackInputTime = GetWorld()->GetTimeSeconds();
 		return;
 	}
 
@@ -172,6 +173,7 @@ void ALogSkylineCharacter::DoAttack()
 	}
 
 	bIsAttacking = true;
+	ComboCount = 0;
 
 	// 4) 表现交给蓝图：C++ 只触发事件，蓝图实现音效 / 特效（未实现时为空操作）
 	BP_OnAttackStarted();
@@ -184,3 +186,39 @@ void ALogSkylineCharacter::DoAttack()
 	});
 	AnimInstance->Montage_SetEndDelegate(EndDelegate, AttackMontage);
 }
+
+void ALogSkylineCharacter::DoAttackTrace(FName DamageSourceBone)
+{
+	// 打击部分暂时搁置
+}
+
+void ALogSkylineCharacter::CheckCombo()
+{
+	if (bIsAttacking)
+	{
+		if (GetWorld()->GetTimeSeconds() - CachedAttackInputTime <= ComboInputCacheTimeTolerance)
+		{
+			CachedAttackInputTime = 0.0f;   // 消费掉，避免同一下被用两次
+			++ComboCount;
+
+			if (ComboCount < ComboSectionNames.Num())
+			{
+				const FName NextSection = ComboSectionNames[ComboCount];
+				UE_LOG(LogLogSkyline, Log, TEXT("Combo step %d -> %s"), ComboCount, *NextSection.ToString());
+
+				if (UAnimInstance* AnimInstance = GetMesh()->GetAnimInstance())
+				{
+					AnimInstance->Montage_JumpToSection(NextSection, AttackMontage);
+				}
+			}
+		}
+	}
+}
+
+
+void ALogSkylineCharacter::CheckChargedAttack()
+{
+	// 蓄力攻击暂不使用
+}
+
+

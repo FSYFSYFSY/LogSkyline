@@ -5,6 +5,7 @@
 #include "CoreMinimal.h"
 #include "GameFramework/Character.h"
 #include "Logging/LogMacros.h"
+#include "CombatAttacker.h"
 #include "LogSkylineCharacter.generated.h"
 
 class USpringArmComponent;
@@ -13,6 +14,7 @@ class UInputAction;
 class UAnimMontage;
 struct FInputActionValue;
 
+
 DECLARE_LOG_CATEGORY_EXTERN(LogTemplateCharacter, Log, All);
 
 /**
@@ -20,7 +22,7 @@ DECLARE_LOG_CATEGORY_EXTERN(LogTemplateCharacter, Log, All);
  *  Implements a controllable orbiting camera
  */
 UCLASS(abstract)
-class ALogSkylineCharacter : public ACharacter
+class ALogSkylineCharacter : public ACharacter, public ICombatAttacker
 {
 	GENERATED_BODY()
 
@@ -56,8 +58,13 @@ protected:
 	UPROPERTY(EditDefaultsOnly, Category = "Combat|Animation")
 	UAnimMontage* AttackMontage;
 
-	/** 是否正在播放攻击蒙太奇，防止连按打断当前动作（普通 C++ 成员，不需要 UPROPERTY） */
-	bool bIsAttacking = false;
+
+	bool bIsAttacking = false; //是否正在播放攻击蒙太奇，防止连按打断当前动作（普通 C++ 成员，不需要 UPROPERTY）
+	float CachedAttackInputTime = 0.0f;   // 攻击中那次按键发生的游戏时刻
+
+	float ComboInputCacheTimeTolerance = 0.45f;   // 连击窗口：按键多久内算有效
+	int32 ComboCount = 0;                          // 当前连到第几段
+	TArray<FName> ComboSectionNames = { FName(TEXT("Melee01")), FName(TEXT("Melee02")), FName(TEXT("Melee03")) };
 
 public:
 
@@ -111,5 +118,13 @@ public:
 
 	/** Returns FollowCamera subobject **/
 	FORCEINLINE class UCameraComponent* GetFollowCamera() const { return FollowCamera; }
+
+public:
+	// ~begin CombatAttacker interface
+	virtual void DoAttackTrace(FName DamageSourceBone) override;
+	virtual void CheckCombo() override;
+	virtual void CheckChargedAttack() override;
+	// ~end CombatAttacker interface
+
 };
 
