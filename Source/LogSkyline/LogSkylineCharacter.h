@@ -98,6 +98,9 @@ protected:
 	UFUNCTION(BlueprintImplementableEvent, Category="Combat", meta=(DisplayName="On Attack Started"))
 	void BP_OnAttackStarted();
 
+	UFUNCTION(BlueprintImplementableEvent, Category = "Combat", meta = (DisplayName = "On Combo Step"))
+	void BP_OnComboStep(int32 ComboStep);
+
 
 public:
 

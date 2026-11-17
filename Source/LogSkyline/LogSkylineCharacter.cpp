@@ -215,6 +215,7 @@ void ALogSkylineCharacter::CheckCombo()
 				if (UAnimInstance* AnimInstance = GetMesh()->GetAnimInstance())
 				{
 					AnimInstance->Montage_JumpToSection(NextSection, AttackMontage);
+					BP_OnComboStep(ComboCount);
 				}
 			}
 		}

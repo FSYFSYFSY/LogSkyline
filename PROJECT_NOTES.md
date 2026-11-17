@@ -2,7 +2,7 @@
 
 > **给接手的 AI：请直接读取本文件作为上下文起点**，不需要翻历史对话。
 > 更细的逐日排障日志在 `.workbuddy/memory/2026-11-08.md`、`2026-11-14.md`、`2026-11-15.md`。
-> 最后更新：2026-11-17 19:07 (GMT+8)
+> 最后更新：2026-11-17 19:40 (GMT+8)
 
 ## 0. 用户与协作方式（先读这段）
 
@@ -48,7 +48,9 @@
   - `aca568d` 蹲下：C++ 构造函数开 `bCanCrouch`、`CrouchedHalfHeight=40`、`MaxWalkSpeedCrouched=150`；蓝图 `IA_Crouch` 事件节点 → `Crouch()/UnCrouch()`。
   - `07ec343` 攻击逻辑重构：`bIsAttacking` 状态守卫与蒙太奇结束委托、`DoAttack()` 加 `BlueprintCallable`、`BP_OnAttackStarted` 钩子；`DummyCharacter` 与 `PROJECT_NOTES.md` 首次入库。
   - `d49d82e` 三段连击（2026-11-16，已提交并推送）：`LogSkylineCharacter.h/.cpp` 补齐 `ICombatAttacker` 实现与连击跳段，详见 §4「三段连击」节。要点：加 `CachedAttackInputTime` / `ComboInputCacheTimeTolerance` / `ComboCount` / `ComboSectionNames` 四个成员；类继承 `ICombatAttacker` + 三个 `override`（`DoAttackTrace` / `CheckChargedAttack` 留空体）；`CheckCombo()` 在 0.45s 窗口内 `++ComboCount` 并 `Montage_JumpToSection(Melee02/03)`。资产 `AM_MyComboAttack` 未改，三段 Section 与两类 Notify 一直在。已编译 + PIE 验证通过。
-  - **2026-11-17 连击参数升级为标准写法（未提交，待编译）**：`ComboInputCacheTimeTolerance` 与 `ComboSectionNames` 改为 `UPROPERTY(EditAnywhere, Category="Combat|Combo")`，值在蓝图面板配；`ComboSectionNames` **保留** `{Melee01, Melee02, Melee03}` 类内初始化器作兜底；`DoAttack()` 增加「数组不足 2 项」自检 Warning。详见 §4「11-17 升级」小节。
+  - `044f51f` 连击参数兜底（2026-11-17，已提交推送）：`ComboSectionNames` 保留类内默认值作兜底、`DoAttack()` 增加「数组不足 2 项」自检 Warning。详见 §4「11-17 升级」小节。
+  - `d0ff00a` 资产侧修复（2026-11-17，已提交推送）：`ABP_Unarmed` 的 Control Rig `Alpha ← NOT IsSlotActive("DefaultSlot")`（修攻击时下半身不动）；`BP_MyplayerCharacter` 填 `ComboSectionNames`。
+  - **2026-11-17 分工改造（未提交）**：新增 `BP_OnComboStep(int32)` 蓝图钩子并接入 `CheckCombo()`；蓝图首次实现 `BP_OnAttackStarted` 与 `On Combo Step` 两个事件。详见 §4「11-17 分工改造」小节。已编译（DLL 19:30）+ PIE 验证通过。
 - 资产：`Content/Myplayer/` 有 `BP_MyplayerCharacter`、`BP_MyplayerGameMode`、`IA_Crouch`、`AM_MyComboAttack`。后者与模板 `Variant_Combat/Anims/AM_ComboAttack` 几乎一致（同 `MM_Attack_01/02/03` + `SK_Mannequin`），内含 `AnimNotify_DoAttackTrace` 与 `AnimNotify_CheckCombo`；`IMC_Default` 已加 `IA_Crouch` + `IA_ComboAttack`。
 - 蓝图 `Touch Input for First Person Movement` 是 `EdGraphNode_Comment` 注释框，内容为**移动端触控编排**（`BPI_TouchInterface_C` 虚拟摇杆）：`Touch Jump Start/End`、`CallFunc_DoMove_*`/`DoLook_*`、`DoJumpStart/End`、`Crouch/UnCrouch`。蓝图里唯一的 EnhancedInput 事件节点是 `InpActEvt_IA_Crouch_...`；**PC 键鼠 5 个输入全绑在 C++**。
 - 自建练习文件 `Source/LogSkyline/DummyCharacter.h/.cpp`（已随 `07ec343` 纳入版本管理），与主线独立，暂不用管。
@@ -82,7 +84,7 @@
 
 ### 11-17 升级：连击参数搬到蓝图 + 默认值兜底
 
-- **改动（未编译，DLL 17:08 < 源码 17:57）**：
+- **改动（已编译，DLL 19:09 晚于源码 17:57）**：
   - `.h`：`ComboInputCacheTimeTolerance` → `UPROPERTY(EditAnywhere, Category="Combat|Combo", meta=(ClampMin=0, ClampMax=5, Units="s"))`，默认 0.45。
   - `.h`：`ComboSectionNames` → `UPROPERTY(EditAnywhere, Category="Combat|Combo")`，**保留**类内初始化器 `= { FName(TEXT("Melee01")), FName(TEXT("Melee02")), FName(TEXT("Melee03")) }`。
   - `.cpp` `DoAttack()`（`bIsAttacking = true; ComboCount = 0;` 之后）：加配置自检，`ComboSectionNames.Num() < 2` 时打 `UE_LOG(..., Warning, "[Combo] ComboSectionNames 只有 %d 项 ...")`，避免漏配后静默退化成单段。
@@ -98,7 +100,51 @@
 
 - **历史误解澄清（重要）**：用户曾反馈「Class Defaults 里明明是空的，却能正常 A 三段」。真因是 `d49d82e` 版本里 `ComboSectionNames` **不是 `UPROPERTY`**，只是普通 C++ 成员，所以蓝图面板上**根本没有这一项**，用户看到的「空」等于「面板上不存在」；而那三个名字一直写在类内初始化器里，运行时 `Num()` 恒为 3。改成 `EditAnywhere` 并清空默认值之后，「空」才第一次等于真的空。**排查此类问题不要只看面板，先查 `git show <commit>:Source/.../LogSkylineCharacter.h` 确认声明方式。**
 - **验证证据**：`Saved/Logs/LogSkyline.log` 2026-11-17 09:31（UTC，即 17:31）连续 4 组 `LogLogSkyline: Combo step 1 -> Melee0` + `LogAnimMontage: Warning: JumpToSectionName Melee0 ... failed` → 证明「错名只打 Warning、不停播，行为退化为单段」，与源码 `AnimMontage.cpp:1816-1837`（找不到 Section 时仅 `UE_LOGF(Warning)` 后 `return false`）一致。
-- **待办**：改完需**完全退出 UE 编辑器**（含 `LiveCodingConsole.exe`）→ VS2026 打开 `LogSkyline.sln` 按 F7（或 `Build.bat ... -NoUBA`）→ 核对 DLL 时间戳比 17:57 新 → PIE 打三下确认，且 Output Log 无 `[Combo] ComboSectionNames 只有 ...` 警告。
+- **编译与验证（11-17 19:09 完成）**：完全退出编辑器（含 `LiveCodingConsole.exe`）→ VS2026 F7 → DLL 19:09（源码 17:57、obj 19:09:09）。用 `grep` 在 DLL 里搜到宽字符 `[Combo] ComboSectionNames` 与 `缺少后续 Section`（`TEXT()` 在 Windows 下是 UTF-16，须按 `utf-16-le` 搜），证明新代码进了二进制而非仅改时间戳。PIE 打三下输出 `Combo step 1 -> Melee02` / `Combo step 2 -> Melee03`，无警告。注意 `UHT/*.generated.h` 时间戳未变属正常——只改默认值初始化器与函数体、未增删反射属性时 UHT 不重跑。
+
+### 11-17 分工改造：把「表现」交给蓝图
+
+- **起因**：用户问「标准项目里有没有该放蓝图的部分」。先做职责审计，结论是规则层不用动，缺的是表现层的出口。
+- **审计表**（`LogSkylineCharacter.h/.cpp` 现状）：
+
+  | 类别 | 内容 | 位置 | 归属 |
+  |---|---|---|---|
+  | 规则 / 逐帧状态 | `bIsAttacking` 守卫、`IsValid` 资源守卫、`Montage_Play` 返回值判断、`EndDelegate` 解锁 | `.cpp:149-193` | 必须 C++ |
+  | 规则 / 逐帧状态 | `CheckCombo()` 的 0.45s 窗口、`++ComboCount`、跳段 | `.cpp:201-222` | 必须 C++ |
+  | 参数 / 资源 | `AttackMontage`、`AttackAction`、`ComboInputCacheTimeTolerance`、`ComboSectionNames` | `.h:55-71` | 已在蓝图侧 |
+  | 表现钩子 | `BP_OnAttackStarted()`、`BP_OnComboStep(int32)` | `.h:99,102` | C++ 触发，蓝图实现 |
+  | 手感数值 | `MaxWalkSpeed`、`JumpZVelocity`、`AirControl`、`BrakingDeceleration*`、`CrouchedHalfHeight`、`MaxWalkSpeedCrouched`、`RotationRate`、`TargetArmLength` | `.cpp:31-48` | **仍硬编码，未动**（见末条） |
+
+- **「搬不搬」的判据**：不要用「数值型就放蓝图」，用**缺失时是否静默失效**。`ComboSectionNames` 空 → 连招静默退化 → 必须 C++ 兜底；`MaxWalkSpeed=0` → 角色不动、一眼可见 → 兜底价值低。
+- **关键认知**：构造函数里设的值**本身就是 CDO 默认值**，蓝图面板一直能覆盖它（`.cpp:33-34` 引擎原注释：`For faster iteration times these variables ... can be tweaked in the Character Blueprint instead of recompiling`）。所以「搬到蓝图」常常不需要改代码。`EditAnywhere` 只是多开「关卡实例」这一层入口，**不改变** `C++ CDO → 蓝图 CDO → 关卡实例` 的优先顺序。
+- `EditDefaultsOnly` 与 `EditAnywhere` 对**本项目角色蓝图无实践差别**：角色实例由 PIE 运行时 spawn，编辑时只有 Class Defaults 一个入口；差别只体现在关卡里手动摆放的 Actor（如 `BP_CombatDummy`）。
+
+**钩子 1 · `BP_OnAttackStarted`**（`07ec343` 已声明，11-17 才首次在蓝图实现）
+
+- C++ 在 `.cpp:185` 调用；蓝图 `BP_MyplayerCharacter` 事件图加 `On Attack Started` → `Print String`。
+- 声明后长期**空转**：C++ 每次攻击都调用，蓝图无对应节点，既不报错也不崩。这是 `BlueprintImplementableEvent` 的设计预期，不是遗漏。
+
+**钩子 2 · `BP_OnComboStep(int32 ComboStep)`**（11-17 新增）
+
+- `.h`：`UFUNCTION(BlueprintImplementableEvent, Category="Combat", meta=(DisplayName="On Combo Step")) void BP_OnComboStep(int32 ComboStep);` —— **只写声明，不写函数体**。
+- `.cpp`：`CheckCombo()` 中放在 `Montage_JumpToSection` **之后**调用 `BP_OnComboStep(ComboCount);`。放之后是因为只有真跳成功才该出表现。
+- 蓝图侧：`On Combo Step` 的 `ComboStep`（Int）→ `To String (Integer)` → `Print String`。**Int 不能直连 `In String`**，UE 不自动转换。
+- **参数是数组下标语义，不是「第几段」**：`Melee01` 不触发；跳到 `Melee02` 传 **1**；跳到 `Melee03` 传 **2**。
+- UHT 生成的 thunk 解释了「蓝图不实现也不崩」：
+
+  ```cpp
+  void ALogSkylineCharacter::BP_OnComboStep(int32 ComboStep)
+  {
+      LogSkylineCharacter_eventBP_OnComboStep_Parms Parms;
+      Parms.ComboStep = ComboStep;
+      UFunction* Func = FindFunctionChecked(NAME_ALogSkylineCharacter_BP_OnComboStep);
+      ProcessEvent(Func, &Parms);   // 蓝图没接这个事件 = 没人接收，直接返回
+  }
+  ```
+
+- **顺序铁律**：`.h` 声明 → 编译（UHT 重跑 + 链接）→ 蓝图里才出现该事件。顺序反了会一直搜不到，是「节点不出现」类问题最常见的原因。
+- **验证证据**：`UFUNCTION` 属反射变更，Live Coding 做不了。实测 `.h` 19:27 → `LogSkylineCharacter.gen.cpp` 19:29（UHT 重跑）→ DLL 19:30，DLL 内命中反射名 `BP_OnComboStep` / `ComboStep`。蓝图 19:38 含 `OnComboStep`×2 + `K2Node_Event` + `ToString` + `PrintString`；日志 19:38:18 / 19:38:21 / 19:38:25 三轮完整跳段，无警告。
+- **未做**：构造函数那批手感数值没清理。真要搬需先确认「删掉代码后蓝图 CDO 会回落到引擎默认值」——`ACharacter` 的 `MaxWalkSpeed` 引擎默认是 **600**，与当前 500 不同，直接删会改手感。
 
 - ⏸ **第 3 步（打击，仍未做）**：让攻击打得到人。接口已登记且三个纯虚函数已实现，但 `DoAttackTrace` 目前是**空函数体**，所以 `AnimNotify_DoAttackTrace` 通知叫得到人却什么都不做。下一步：在 `DoAttackTrace(FName DamageSourceBone)` 里做球形检测 → `Cast<ICombatDamageable>` → `ApplyDamage`。蒙太奇已自带通知，不用新建。范例：`Variant_Combat/CombatCharacter.cpp:267-310`、`AnimNotify_DoAttackTrace.cpp`、`CombatDummy.h`。靶子可用 `Lvl_Combat` 的假人（是 `AActor` 木桩、只击退+反馈、**不掉血**）。注意 `Lvl_Combat` 的 World Settings 覆写 GameMode，进去操控的是模板 `BP_CombatCharacter`，不是 `BP_MyplayerCharacter`。
 - ⏸ **第 4 步（以后）**：`FGameplayTag` 管攻击中/可连击状态；多人则蒙太奇走服务器 RPC / GAS。
@@ -136,9 +182,11 @@
 - 结论：`BlueprintCallable` 决定「蓝图能不能调」，**不决定「实现在哪」**；差别只是触发源数量（Move/Look/Jump 两个：键鼠 + 触控；Attack 目前一个：键鼠）。
 - **`BindAction` 是什么（14:26 教学）**：登记「某个 IA 触发时调用哪个函数」的一根线，本身不执行动作。四参数 = IA 资产 / `ETriggerEvent`（`Started` 刚按下、`Triggered` 持续给值、`Completed` 松开）/ 目标对象 / 函数指针；项目 `.cpp:77` = `BindAction(AttackAction, Started, this, &DoAttack)`，**登记时 C++ 就知道调谁，运行时只是查表分发**。只在 `SetupPlayerInputComponent` 登记**一次**，之后每次按键由引擎自动分发，不是每帧、也不是每次按键都跑。Enhanced Input 三层：IA（是什么动作，Content 资产）→ IMC（哪个键触发，Content 资产）→ BindAction（触发后调哪个函数，C++）。蓝图 `IA_Crouch` 事件节点本质同一根线，只是画成节点。不写它则资产与函数互不相连，按键无反应。速查：`grep -n "BindAction" Source/LogSkyline/LogSkylineCharacter.cpp` 看全部 6 条登记。
 - **「BP_OnAttackStarted 不写 .cpp 实现」不是漏写（16:04 教学）**：`BlueprintImplementableEvent` 的函数体归蓝图，UHT 在 `*.gen.cpp` 自动生成 thunk（运行时查蓝图有无实现该事件）；若再手写 `void ALogSkylineCharacter::BP_OnAttackStarted(){}` 会与 thunk 重复定义 → 编译失败。蓝图未实现时是 no-op，故可「先加钩子、后接线」，中间项目照跑。方向对照：`BlueprintCallable`（`DoAttack`）= C++ 写函数体、蓝图调；`BlueprintImplementableEvent` = 蓝图写函数体、C++ 调；`BlueprintNativeEvent` = C++ 写 `_Implementation` 默认实现、蓝图可覆盖。`DoAttack()` 第 146–186 行的动画逻辑（守卫 / `Montage_Play` 第 168 行 / 结束委托）一行未删，只插入第 177 行一次触发。
-- **「为什么要绕一个 BP_OnAttackStarted」（16:10 教学，用户明确觉得绕）**：这一步**不是功能需求**，是主动补的未来准备；删掉 `.cpp:177` 与 `.h:84-86` 声明，攻击/动画/防连按行为完全不变。外部仍然是**直接调 `DoAttack()`**，钩子不在调用链上，而是主链内部向蓝图广播的**旁支**（方向 C++ → 蓝图），蓝图未实现时是 no-op，所以现在这一嗓子没有任何可见效果。价值只在将来加音效/特效时：蓝图「添加事件 → On Attack Started」接一下即可（编译蓝图，秒级），否则要改 C++ → 关编辑器全量编译 → 重开，且把具体音效资源焊死在代码里（C++ 不该知道播哪个音效）。**用户若只关注功能与第 3 步，可以现在删掉它**；趁 13:55 改动尚未编译成功，删掉不会多一次全量编译。
+- **「为什么要绕一个 BP_OnAttackStarted」（16:10 教学，用户明确觉得绕）**：这一步**不是功能需求**，是主动补的未来准备；删掉 `.cpp:177` 与 `.h:84-86` 声明，攻击/动画/防连按行为完全不变。外部仍然是**直接调 `DoAttack()`**，钩子不在调用链上，而是主链内部向蓝图广播的**旁支**（方向 C++ → 蓝图），蓝图未实现时是 no-op，所以现在这一嗓子没有任何可见效果。价值只在将来加音效/特效时：蓝图「添加事件 → On Attack Started」接一下即可（编译蓝图，秒级），否则要改 C++ → 关编辑器全量编译 → 重开，且把具体音效资源焊死在代码里（C++ 不该知道播哪个音效）。**用户若只关注功能与第 3 步，可以现在删掉它**；趁 13:55 改动尚未编译成功，删掉不会多一次全量编译。（**11-17 更新：该钩子最终保留，并已在蓝图实现为 `On Attack Started → Print String`，见 §4「11-17 分工改造」；当前行号为 `.h:97-99` 与 `.cpp:185`，不再是本条写的 `.h:84-86` / `.cpp:177`。**）
 - **「为什么音效走钩子、动画不走」（16:26 教学）**：答案不是「不能复用」——C++ 里并排写一行 `PlaySound` 完全能编译运行；差别在于 `Montage_Play` 那条链是**双向且参与状态机**的：`Duration` 返回值判断播放成败（`.cpp:168-172`）、`Montage_SetEndDelegate` 解锁 `bIsAttacking`（`.cpp:180-185`）、蒙太奇时间轴上的 `AnimNotify_DoAttackTrace` / `AnimNotify_CheckCombo` 驱动第 3 步命中与连击 → 蒙太奇是**攻击的计时器和逻辑时间轴**，不只是表现。而 `BP_OnAttackStarted` 是**单向广播、无返回值**，把蒙太奇挪过去 C++ 就拿不到 Duration、挂不上结束委托，状态永远不解锁。判断口诀：**「它会不会影响判定、时长、状态？」会 → C++ 内部直接调；不会 → 广播给蓝图**。钩子也不是「音效专用接口」，而是「一次真实攻击开始了」这个事实的广播，音效/特效/震屏/UI/成就都是消费者。反过来，纯装饰不参与判定的动画（披风、拖尾）用钩子在蓝图播更合适——分界是「参与规则 vs 纯表现」，不是「动画 vs 音效」。
 - **Montage 的心智模型（16:46 教学，用户自述「之前可能理解错了」）**：`UAnimMontage` **不是动画**，是「分镜脚本 + 时间轴」；动画数据是 `AnimSequence`（`MM_Attack_01/02/03`）。四层结构：`SlotAnimTracks` / `DefaultSlot`（插播通道，叠加在 AnimBP 状态机输出之上，播完自动退回，状态机无需为攻击加状态）、`AnimSegments`（胶片顺序 / `AnimStartTime` / `AnimPlayRate`）、`CompositeSections` + `NextSectionName`（可跳章节，模板 `CheckCombo()` 用 `Montage_JumpToSection(ComboSectionNames[ComboCount], ...)`，输入窗口 0.45s）、`AnimNotifyTracks`（时间轴打点：`AnimNotify_DoAttackTrace` → `Cast<ICombatAttacker>` → `DoAttackTrace`；`AnimNotify_CheckCombo` → `CheckCombo`）；另有 `BlendIn/Out`。资产绑定 `SK_Mannequin` 骨架。**意义 = 把「时间」变成可编程对象**：代码 `Montage_Play` 主动启动并拿回 `MontageLength`，`Montage_SetEndDelegate` 拿结束/打断通知，Section 让代码跳段，Notify 让动画在指定帧反过来叫代码。所以换 Montage 不只是换画面，连攻击时长、命中帧、连击窗口、结束时机一起换。常见误解：① 以为是一段动画 ② 以为由 AnimBP 状态机决定播放 ③ 以为是纯表现、与逻辑无关 ④ 以为播完代码不用管。**本项目现状（2026-11-16 更新）**：`AM_MyComboAttack` 的完整答案已被 C++ 用上——角色已登记 `ICombatAttacker`、`CheckCombo` 通知驱动 `Montage_JumpToSection` 跳 `Melee02/03`，三段连击验证通过；`DoAttackTrace` 通知也能叫到角色但实现为空（打击待做，见 §4）。
 - 排查口诀：`grep -rn "UFUNCTION(Blueprint" Source/LogSkyline/LogSkylineCharacter.h` 看哪些函数允许蓝图调用；`grep -rn "BindAction" Source/` 看键鼠触发源；蓝图 `Touch Input` 注释框看触控触发源。
 - **事件图表里混了两类节点（13:49 核实）**：`Touch Input for First Person Movement` 注释框**内** = 触控/移动端（`BPI_TouchInterface_C` 虚拟摇杆、`Touch Jump Start/End`、调用 `DoMove`/`DoLook`/`DoJumpStart`），PC 上没有虚拟摇杆 UI 时不会触发；注释框**外**唯一的 EnhancedInput 事件节点 `InpActEvt_IA_Crouch_K2Node_EnhancedInputActionEvent` = **标准 Enhanced Input，PC 端也走这里**（`IA_Crouch` 在 `IMC_Default` 有键位映射）。C++ 里**没有** `CrouchAction` 属性、也没有 `BindAction(CrouchAction,...)`，所以蹲下是唯一完全靠蓝图事件节点驱动的 PC 输入；其余 5 个键鼠输入（Jump/Move/Look/MouseLook/Attack）都在 C++ `SetupPlayerInputComponent`。PIE 用键盘时实际走「C++ 那 5 个 + 蓝图 `IA_Crouch` 事件」，两套入口最终汇到同一批 C++ 函数。
 - **「Class Defaults 里是空的，为什么还能连三段」（11-17 澄清）**：先分清两件事——**面板上有没有这一项** vs **这一项的值是不是空**。`d49d82e` 时期 `ComboSectionNames` 没有 `UPROPERTY`，蓝图面板上不存在该属性，默认值写在 C++ 类内初始化器里照样生效；2026-11-17 改成 `EditAnywhere` 后它才出现在面板，此时「空」才等于真的空。判断顺序：① 声明有没有 `UPROPERTY`（`grep -n ComboSectionNames Source/LogSkyline/LogSkylineCharacter.h`）② 类内初始化器有没有默认值 ③ 蓝图 CDO 有没有覆盖 ④ 最后才看运行时日志。其中 ③ 的规则是 **蓝图 CDO > C++ 类默认值**：蓝图保存过就存了自己一份，之后 C++ 怎么改默认值都不跟随，包括「空数组」这个值；要恢复继承得点属性行的 Reset to Default（黄色回退箭头）。反过来看同样成立——C++ 里「看起来是空」也不代表运行时是空，这就是 11-17 那次误判的根因。
+- **「`BlueprintImplementableEvent` 声明了但蓝图一直没实现，会不会崩」（11-17 用户主动提问）**：不会。UHT 为它生成的 thunk 是 `FindFunctionChecked` + `ProcessEvent`，蓝图事件图里没有对应节点就等于没有接收者，`ProcessEvent` 直接返回，不报错不崩溃。**没有实现 ≠ 遗漏**，这类钩子天生可选（`BP_OnAttackStarted` 就这样空转了三天才在 11-17 接上）。反过来，C++ 侧**必须**只写声明、不写函数体，写成 `{ }` 会编译报错；漏写 `UFUNCTION` 宏则链接失败（缺 thunk 定义）。
+- **「`EditDefaultsOnly` 和 `EditAnywhere` 到底差在哪」（11-17 教学）**：差别只在**关卡里摆着的实例**的 Details 面板里会不会出现这一项。`EditDefaultsOnly` 只在 Class Defaults 可改；`EditAnywhere` 两处都可改；`EditInstanceOnly` 只在实例可改；`Visible*` 系列是对应 `Edit*` 的只读版。**对 `BP_MyplayerCharacter` 这种运行时 spawn 的角色无实践差别**——编辑时只有 Class Defaults 一个入口。真正能看出区别的是关卡里手摆的 Actor（`BP_CombatDummy` 在 `Lvl_Combat` 里摆了多个，逐个可调）。用哪个取决于「要不要允许某个实例偏离类型默认」：`AttackMontage` 用 `EditDefaultsOnly`（一套动作属于角色类型，不允许实例换），`ComboInputCacheTimeTolerance` 用 `EditAnywhere`（手感参数，未来可能让不同变体有不同窗口）。
