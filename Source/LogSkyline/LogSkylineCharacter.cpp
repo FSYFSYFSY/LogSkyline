@@ -175,6 +175,12 @@ void ALogSkylineCharacter::DoAttack()
 	bIsAttacking = true;
 	ComboCount = 0;
 
+	// 配置自检：数组少于两项时，连招只可能停在第一段，提前在日志里点名，避免静默失效
+	if (ComboSectionNames.Num() < 2)
+	{
+		UE_LOG(LogLogSkyline, Warning, TEXT("[Combo] ComboSectionNames 只有 %d 项，缺少后续 Section 名，连招会退化为单段"), ComboSectionNames.Num());
+	}
+
 	// 4) 表现交给蓝图：C++ 只触发事件，蓝图实现音效 / 特效（未实现时为空操作）
 	BP_OnAttackStarted();
 

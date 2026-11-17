@@ -62,9 +62,15 @@ protected:
 	bool bIsAttacking = false; //是否正在播放攻击蒙太奇，防止连按打断当前动作（普通 C++ 成员，不需要 UPROPERTY）
 	float CachedAttackInputTime = 0.0f;   // 攻击中那次按键发生的游戏时刻
 
+	UPROPERTY(EditAnywhere, Category = "Combat|Combo", meta = (ClampMin = 0, ClampMax = 5, Units = "s"))
 	float ComboInputCacheTimeTolerance = 0.45f;   // 连击窗口：按键多久内算有效
-	int32 ComboCount = 0;                          // 当前连到第几段
+
+	int32 ComboCount = 0;                          // 运行时状态，留 C++ 不暴露
+
+	UPROPERTY(EditAnywhere, Category = "Combat|Combo")
 	TArray<FName> ComboSectionNames = { FName(TEXT("Melee01")), FName(TEXT("Melee02")), FName(TEXT("Melee03")) };
+	// 兜底默认值：C++ 给一份可用的，蓝图面板可覆盖；数组的第 0 项不参与跳段（只用 [1]、[2]）
+
 
 public:
 
