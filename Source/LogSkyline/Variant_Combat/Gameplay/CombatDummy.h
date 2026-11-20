@@ -57,6 +57,14 @@ public:
 
 protected:
 
+	virtual void BeginPlay() override;
+
+	UPROPERTY(EditAnywhere, Category = "Damage", meta = (ClampMin = 0, ClampMax = 100))
+	float MaxHP = 5.0f;
+
+	UPROPERTY(VisibleAnywhere, Category = "Damage")
+	float CurrentHP = 0.0f;
+
 	/** Blueprint handle to apply damage effects */
 	UFUNCTION(BlueprintImplementableEvent, Category="Combat", meta = (DisplayName = "On Dummy Damaged"))
 	void BP_OnDummyDamaged(const FVector& Location, const FVector& Direction);

@@ -50,7 +50,8 @@
   - `d49d82e` 三段连击（2026-11-16，已提交并推送）：`LogSkylineCharacter.h/.cpp` 补齐 `ICombatAttacker` 实现与连击跳段，详见 §4「三段连击」节。要点：加 `CachedAttackInputTime` / `ComboInputCacheTimeTolerance` / `ComboCount` / `ComboSectionNames` 四个成员；类继承 `ICombatAttacker` + 三个 `override`（`DoAttackTrace` / `CheckChargedAttack` 留空体）；`CheckCombo()` 在 0.45s 窗口内 `++ComboCount` 并 `Montage_JumpToSection(Melee02/03)`。资产 `AM_MyComboAttack` 未改，三段 Section 与两类 Notify 一直在。已编译 + PIE 验证通过。
   - `044f51f` 连击参数兜底（2026-11-17，已提交推送）：`ComboSectionNames` 保留类内默认值作兜底、`DoAttack()` 增加「数组不足 2 项」自检 Warning。详见 §4「11-17 升级」小节。
   - `d0ff00a` 资产侧修复（2026-11-17，已提交推送）：`ABP_Unarmed` 的 Control Rig `Alpha ← NOT IsSlotActive("DefaultSlot")`（修攻击时下半身不动）；`BP_MyplayerCharacter` 填 `ComboSectionNames`。
-  - **2026-11-17 分工改造（未提交）**：新增 `BP_OnComboStep(int32)` 蓝图钩子并接入 `CheckCombo()`；蓝图首次实现 `BP_OnAttackStarted` 与 `On Combo Step` 两个事件。详见 §4「11-17 分工改造」小节。已编译（DLL 19:30）+ PIE 验证通过。
+  - `2f2f2a6` 分工改造（2026-11-17，已提交）：新增 `BP_OnComboStep(int32)` 蓝图钩子并接入 `CheckCombo()`；蓝图首次实现 `BP_OnAttackStarted` 与 `On Combo Step` 两个事件。详见 §4「11-17 分工改造」小节。已编译（DLL 19:30）+ PIE 验证通过。
+  - `d9f055e` 打击判定（2026-11-20，已提交）：`DoAttackTrace()` 球扫 + `Cast<ICombatDamageable>` + `ApplyDamage` + 按 Actor 去重；`.h` 新增 5 个 `Combat|Melee` 参数。详见 §4「第 3 步」。
 - 资产：`Content/Myplayer/` 有 `BP_MyplayerCharacter`、`BP_MyplayerGameMode`、`IA_Crouch`、`AM_MyComboAttack`。后者与模板 `Variant_Combat/Anims/AM_ComboAttack` 几乎一致（同 `MM_Attack_01/02/03` + `SK_Mannequin`），内含 `AnimNotify_DoAttackTrace` 与 `AnimNotify_CheckCombo`；`IMC_Default` 已加 `IA_Crouch` + `IA_ComboAttack`。
 - 蓝图 `Touch Input for First Person Movement` 是 `EdGraphNode_Comment` 注释框，内容为**移动端触控编排**（`BPI_TouchInterface_C` 虚拟摇杆）：`Touch Jump Start/End`、`CallFunc_DoMove_*`/`DoLook_*`、`DoJumpStart/End`、`Crouch/UnCrouch`。蓝图里唯一的 EnhancedInput 事件节点是 `InpActEvt_IA_Crouch_...`；**PC 键鼠 5 个输入全绑在 C++**。
 - 自建练习文件 `Source/LogSkyline/DummyCharacter.h/.cpp`（已随 `07ec343` 纳入版本管理），与主线独立，暂不用管。
@@ -146,8 +147,20 @@
 - **验证证据**：`UFUNCTION` 属反射变更，Live Coding 做不了。实测 `.h` 19:27 → `LogSkylineCharacter.gen.cpp` 19:29（UHT 重跑）→ DLL 19:30，DLL 内命中反射名 `BP_OnComboStep` / `ComboStep`。蓝图 19:38 含 `OnComboStep`×2 + `K2Node_Event` + `ToString` + `PrintString`；日志 19:38:18 / 19:38:21 / 19:38:25 三轮完整跳段，无警告。
 - **未做**：构造函数那批手感数值没清理。真要搬需先确认「删掉代码后蓝图 CDO 会回落到引擎默认值」——`ACharacter` 的 `MaxWalkSpeed` 引擎默认是 **600**，与当前 500 不同，直接删会改手感。
 
-- ⏸ **第 3 步（打击，仍未做）**：让攻击打得到人。接口已登记且三个纯虚函数已实现，但 `DoAttackTrace` 目前是**空函数体**，所以 `AnimNotify_DoAttackTrace` 通知叫得到人却什么都不做。下一步：在 `DoAttackTrace(FName DamageSourceBone)` 里做球形检测 → `Cast<ICombatDamageable>` → `ApplyDamage`。蒙太奇已自带通知，不用新建。范例：`Variant_Combat/CombatCharacter.cpp:267-310`、`AnimNotify_DoAttackTrace.cpp`、`CombatDummy.h`。靶子可用 `Lvl_Combat` 的假人（是 `AActor` 木桩、只击退+反馈、**不掉血**）。注意 `Lvl_Combat` 的 World Settings 覆写 GameMode，进去操控的是模板 `BP_CombatCharacter`，不是 `BP_MyplayerCharacter`。
-- ⏸ **第 4 步（以后）**：`FGameplayTag` 管攻击中/可连击状态；多人则蒙太奇走服务器 RPC / GAS。
+- ✅ **第 3 步（打击，2026-11-20 完成，提交 `d9f055e`）**：让攻击打得到人。
+  - 实现：`LogSkylineCharacter.cpp:198` 起 `DoAttackTrace(FName DamageSourceBone)` 球扫——`GetMesh()->GetSocketLocation` 取起点、沿 `GetActorForwardVector() * MeleeTraceDistance` 延伸、`SweepMultiByObjectType`（`ECC_Pawn` + `ECC_WorldDynamic`，`AddIgnoredActor(this)`）→ 按 Actor 去重 `TSet<AActor*> AlreadyHit` → `Cast<ICombatDamageable>` → `ApplyDamage(MeleeDamage, this, Hit.ImpactPoint, Impulse)`，冲量 `ImpactNormal * -Knockback + UpVector * Launch`。
+  - 参数（`.h`，`Category="Combat|Melee"`，全部 `EditAnywhere`）：`MeleeTraceDistance=75` / `MeleeTraceRadius=75` / `MeleeDamage=1` / `MeleeKnockbackImpulse=250` / `MeleeLaunchImpulse=300`，取自 `Variant_Combat/CombatCharacter.h:108-132`。
+  - 去重是模板没有的：同一 Actor 多个碰撞体会返回多条命中，不去重则冲量叠加、一刀多份伤害。
+  - 验证：日志 `打击: 扫到 BP_CombatDummy_C_...` 9 次 / 没扫到 3 次；木桩被推得晃动，屏幕出现蓝色火花。
+- **木桩的两条「非教学」行为（已解释，非 bug）**：
+  - **打击特效不是用户加的**：`ACombatDummy::ApplyDamage` 调 `BP_OnDummyDamaged`，模板 `BP_CombatDummy` 已实现该事件并 `SpawnSystemAtLocation(/Game/Variant_Combat/VFX/NS_Damage)`。换任何 `ICombatDamageable` 实现者都各自负责自己的受击表现。
+  - **木桩是「吊」着的不是「站」着的**：`CombatDummy.cpp` 构造函数 `Dummy->SetSimulatePhysics(true)` + `PhysicsConstraint->SetConstrainedComponents(BasePlate, None, Dummy, None)`；引擎约束默认 **Linear 三轴 Locked / Angular 三轴 Free**（`ConstraintInstance.cpp:359-370`）＝倒立摆。模板蓝图把角向改成 `Limited` 才能晃而不倒。摆进关卡时若 `Dummy` 与地面穿插，第一帧解算会把它顶歪；位置被锁死所以冲量只转成角速度 → 一直旋转。修法：抬高 Z 5~10、角向限位 15°、`Angular Damping` 调 3。
+- ⏭ **第 4 步（进行中，2026-11-20）**：让伤害「有后果」。`ICombatDamageable` 四个函数目前三个是空 stub（`HandleDeath` / `ApplyHealing` / `NotifyDanger`），木桩永远打不死。
+  - 4-1 加血量：`ACombatDummy` 加 `MaxHP`(默认 5，对齐 `ACombatCharacter.h:78`) / `CurrentHP`，**在 `BeginPlay()` 里初始化 `CurrentHP = MaxHP`**（不可放构造函数，否则蓝图改 `MaxHP` 后 `CurrentHP` 仍是旧值）；`ApplyDamage` 扣血 + 日志。验收：打五下，HP 4/5 → 0/5。
+  - 4-2 `HandleDeath()`：断约束 / 让木桩倒地（模板 `ACombatCharacter::HandleDeath` 可参照：禁移动、开 ragdoll、隐藏血条、定时重生）。
+  - 4-3（可选）血条 UI：模板 `Content/Variant_Combat/UI/UI_LifeBar` + C++ 类 `UCombatLifeBar`（`SetLifePercentage`），`ACombatCharacter` 用 `UWidgetComponent* LifeBar` 挂在角色上。
+  - 注意：改 `ACombatDummy` 基类会同时影响 `Lvl_Combat` 里的同款木桩（共用 `BP_CombatDummy`）。
+- ⏸ **第 5 步（以后）**：`FGameplayTag` 管攻击中/可连击状态；多人则蒙太奇走服务器 RPC / GAS。
 
 ## 5. 架构约定（用户已确认理解）
 

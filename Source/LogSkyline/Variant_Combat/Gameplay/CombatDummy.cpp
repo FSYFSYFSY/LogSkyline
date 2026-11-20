@@ -33,16 +33,36 @@ ACombatDummy::ACombatDummy()
 
 void ACombatDummy::ApplyDamage(float Damage, AActor* DamageCauser, const FVector& DamageLocation, const FVector& DamageImpulse)
 {
+
+	if (CurrentHP <= 0.0f)
+	{
+		return;
+	}
+
+	CurrentHP = FMath::Max(0.0f, CurrentHP - Damage);
+	UE_LOG(LogTemp, Log, TEXT("[Dummy] HP %.0f / %.0f"), CurrentHP, MaxHP);
+
 	// apply impulse to the dummy
 	Dummy->AddImpulseAtLocation(DamageImpulse, DamageLocation);
 
 	// call the BP handler
 	BP_OnDummyDamaged(DamageLocation, DamageImpulse.GetSafeNormal());
+
+	if (CurrentHP <= 0.0f)
+	{
+		HandleDeath();
+	}
 }
 
 void ACombatDummy::HandleDeath()
 {
-	// unused
+	// 断开约束：靶体不再被钉在底座上
+	if (PhysicsConstraint)
+	{
+		PhysicsConstraint->BreakConstraint();
+	}
+
+	UE_LOG(LogTemp, Log, TEXT("[Dummy] 已击毁，约束已断开"));
 }
 
 void ACombatDummy::ApplyHealing(float Healing, AActor* Healer)
@@ -54,3 +74,10 @@ void ACombatDummy::NotifyDanger(const FVector& DangerLocation, AActor* DangerSou
 {
 	// unused
 }
+
+void ACombatDummy::BeginPlay()
+{
+	Super::BeginPlay();
+	CurrentHP = MaxHP;
+}
+
