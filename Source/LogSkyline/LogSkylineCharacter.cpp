@@ -1,6 +1,7 @@
 // Copyright Epic Games, Inc. All Rights Reserved.
 
 #include "LogSkylineCharacter.h"
+#include "Engine/World.h"
 #include "Engine/LocalPlayer.h"
 #include "Camera/CameraComponent.h"
 #include "Components/CapsuleComponent.h"
@@ -12,6 +13,7 @@
 #include "InputActionValue.h"
 #include "LogSkyline.h"
 #include "Components/SkeletalMeshComponent.h"
+#include "CombatDamageable.h"
 #include "Animation/AnimInstance.h"
 
 
@@ -195,8 +197,65 @@ void ALogSkylineCharacter::DoAttack()
 
 void ALogSkylineCharacter::DoAttackTrace(FName DamageSourceBone)
 {
-	// 打击部分暂时搁置
+	// ① 起点：通知指定的骨骼在世界空间的位置（就是刚才日志里的 hand_r）
+	const FVector TraceStart = GetMesh()->GetSocketLocation(DamageSourceBone);
+
+	// ② 终点：从起点沿角色正前方伸出 MeleeTraceDistance
+	const FVector TraceEnd = TraceStart + GetActorForwardVector() * MeleeTraceDistance;
+
+	// ③ 判定形状：一个半径 MeleeTraceRadius 的球，从起点扫到终点
+	FCollisionShape Sphere;
+	Sphere.SetSphere(MeleeTraceRadius);
+
+	// ④ 只关心两类东西：角色(Pawn) 和 会动的物理物体(WorldDynamic)
+	FCollisionObjectQueryParams ObjectParams;
+	ObjectParams.AddObjectTypesToQuery(ECC_Pawn);
+	ObjectParams.AddObjectTypesToQuery(ECC_WorldDynamic);
+
+	// ⑤ 别扫到自己
+	FCollisionQueryParams QueryParams;
+	QueryParams.AddIgnoredActor(this);
+
+	// ⑥ 扫掠，一次可能撞到多个物体，所以用数组接
+	TArray<FHitResult> Hits;
+	const bool bHit = GetWorld()->SweepMultiByObjectType(
+		Hits, TraceStart, TraceEnd, FQuat::Identity, ObjectParams, Sphere, QueryParams);
+
+	if (!bHit)
+	{
+		UE_LOG(LogLogSkyline, Log, TEXT("打击: 没扫到任何东西"));
+		return;
+	}
+
+	// 同一个 Actor 可能有多个碰撞体，扫掠会给每个都返回一条命中；
+// 记一下已经打过的，避免一次挥砍造成多份伤害、冲量翻倍
+	TSet<AActor*> AlreadyHit;
+
+	for (const FHitResult& Hit : Hits)
+	{
+		AActor* HitActor = Hit.GetActor();
+		if (!IsValid(HitActor) || AlreadyHit.Contains(HitActor))
+		{
+			continue;
+		}
+
+		// 只有实现了伤害接口的对象才会挨打
+		if (ICombatDamageable* Damageable = Cast<ICombatDamageable>(HitActor))
+		{
+			AlreadyHit.Add(HitActor);
+
+			// 冲量：沿碰撞法线反向推离自己，再叠加一个向上的分量
+			const FVector Impulse = (Hit.ImpactNormal * -MeleeKnockbackImpulse)
+				+ (FVector::UpVector * MeleeLaunchImpulse);
+
+			Damageable->ApplyDamage(MeleeDamage, this, Hit.ImpactPoint, Impulse);
+
+			UE_LOG(LogLogSkyline, Log, TEXT("打击: %s 受到 %.1f 伤害"), *GetNameSafe(HitActor), MeleeDamage);
+		}
+	}
+
 }
+
 
 void ALogSkylineCharacter::CheckCombo()
 {
@@ -221,7 +280,6 @@ void ALogSkylineCharacter::CheckCombo()
 		}
 	}
 }
-
 
 void ALogSkylineCharacter::CheckChargedAttack()
 {

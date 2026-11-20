@@ -71,6 +71,21 @@ protected:
 	TArray<FName> ComboSectionNames = { FName(TEXT("Melee01")), FName(TEXT("Melee02")), FName(TEXT("Melee03")) };
 	// 兜底默认值：C++ 给一份可用的，蓝图面板可覆盖；数组的第 0 项不参与跳段（只用 [1]、[2]）
 
+	UPROPERTY(EditAnywhere, Category = "Combat|Melee", meta = (ClampMin = 0, ClampMax = 500, Units = "cm"))
+	float MeleeTraceDistance = 75.0f;      // 从手往前扫多远
+
+	UPROPERTY(EditAnywhere, Category = "Combat|Melee", meta = (ClampMin = 0, ClampMax = 200, Units = "cm"))
+	float MeleeTraceRadius = 75.0f;        // 球的半径，决定"判定有多宽"
+
+	UPROPERTY(EditAnywhere, Category = "Combat|Melee", meta = (ClampMin = 0, ClampMax = 100))
+	float MeleeDamage = 1.0f;              // 伤害值
+
+	UPROPERTY(EditAnywhere, Category = "Combat|Melee", meta = (ClampMin = 0, ClampMax = 1000, Units = "cm/s"))
+	float MeleeKnockbackImpulse = 250.0f;  // 水平击退力度
+
+	UPROPERTY(EditAnywhere, Category = "Combat|Melee", meta = (ClampMin = 0, ClampMax = 1000, Units = "cm/s"))
+	float MeleeLaunchImpulse = 300.0f;     // 上抛力度
+
 
 public:
 
