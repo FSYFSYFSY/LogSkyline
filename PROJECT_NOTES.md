@@ -2,7 +2,7 @@
 
 > **给接手的 AI：请直接读取本文件作为上下文起点**，不需要翻历史对话。
 > 更细的逐日排障日志在 `.workbuddy/memory/2026-11-08.md`、`2026-11-14.md`、`2026-11-15.md`。
-> 最后更新：2026-11-17 19:40 (GMT+8)
+> 最后更新：2026-11-22 12:10 (GMT+8)
 
 ## 0. 用户与协作方式（先读这段）
 
@@ -15,14 +15,26 @@
 
 | 项 | 值 |
 |---|---|
-| 项目根 | `E:\UEProjects\LogSkyline`（2026-11-17 核实；本文早期记录里的 `D:\LogSkyline\LogSkyline` 已失效，命令请按 E 盘路径读） |
-| 引擎 | `E:\UE_5.8`，**手动安装的 Installed Build**（注册表未登记 5.8） |
+| 项目根 | 两台机器各一套，**均有效**：本机（当前会话）`D:\LogSkyline\LogSkyline`；另一台机器 `E:\UEProjects\LogSkyline`。详见下方「多机器路径约定」 |
+| 引擎 | 两台机器各一套，**均有效**：本机 `D:\UE_5.8`；另一台机器 `E:\UE_5.8`。均为**手动安装的 Installed Build**（注册表未登记 5.8） |
 | 模板 | UE 5.8 Third Person，含 `Variant_Combat` / `Variant_Platforming` / `Variant_SideScrolling` |
 | uproject | `LogSkyline.uproject`，`EngineAssociation` 已被 UE 改成 `"5.8"`（已随 `07ec343` 提交） |
-| Git | `FSYFSYFSY/LogSkyline`，分支 `FSY_tut`（HEAD 以 `git log -1` 为准；`07ec343` 为攻击重构 + 文档首次入库）；`origin` fetch = 官方 HTTPS、push = SSH；`mirror` = ghproxy 镜像，且为 `FSY_tut` 上游 |
+| Git | `FSYFSYFSY/LogSkyline`，分支 `FSY_tut`（HEAD 以 `git log -1` 为准）；`origin` 的 fetch 与 push 均为 SSH（2026-11-22 起，本机官方 HTTPS 不通），上游为 `origin/FSY_tut`；`mirror` = ghproxy 备用镜像 |
 | IDE | VS2026 Community (18.0) |
 
+> **多机器路径约定（重要，勿改）**
+> 本仓库在**两台不同的机器**上各有一份项目，两套路径同时有效，**不要为了「统一」而把其中一套改写或删除**。尤其是引擎路径：两边的 UE 5.8 都是手动安装的 Installed Build，只是盘符不同。
+>
+> | 机器 | 项目根 | 引擎 | 笔记中的体现 |
+> |---|---|---|---|
+> | A（当前会话，D 盘） | `D:\LogSkyline\LogSkyline` | `D:\UE_5.8` | §2 的编译 / 生成项目文件命令示例用的是这套 |
+> | B（远端 11-17 之后提交的来源，E 盘） | `E:\UEProjects\LogSkyline` | `E:\UE_5.8` | §1 表格曾以此为准，正文部分描述沿用 |
+>
+> 因此：① 表格里的 `E:\UE_5.8` 与 §2 命令里的 `D:\UE_5.8` **并不矛盾，不要改动引擎路径去对齐**；② 在任一机器上执行命令前，按该机器自己的路径替换，不要用另一台机器的；③ 以后维护本文件时，不要把另一台机器的路径判为「失效」并删除；④ 提交前确认改动只涉及「说明」，没有把路径值本身改掉。
+
 ## 2. 环境坑与速查命令
+
+> 本节命令示例按**机器 A（D 盘）**书写；在机器 B（E 盘）上请把 `D:\UE_5.8` / `D:\LogSkyline\LogSkyline` 替换为 `E:\UE_5.8` / `E:\UEProjects\LogSkyline`。依据见 §1「多机器路径约定」，**引擎路径本身不要改**。
 
 - **没有** `GenerateProjectFiles.bat`，Windows 右键也没有 "Generate Visual Studio project files"（引擎手动安装、未注册 shell 扩展）。刷新项目文件用：
   ```
