@@ -178,9 +178,9 @@ void ALogSkylineCharacter::DoAttack()
 	ComboCount = 0;
 
 	// 配置自检：数组少于两项时，连招只可能停在第一段，提前在日志里点名，避免静默失效
-	if (ComboSectionNames.Num() < 2)
+	if (ComboSteps.Num() < 2)
 	{
-		UE_LOG(LogLogSkyline, Warning, TEXT("[Combo] ComboSectionNames 只有 %d 项，缺少后续 Section 名，连招会退化为单段"), ComboSectionNames.Num());
+		UE_LOG(LogLogSkyline, Warning, TEXT("[Combo] ComboSteps 只有 %d 项，缺少后续 Section，连招会退化为单段"), ComboSteps.Num());
 	}
 
 	// 4) 表现交给蓝图：C++ 只触发事件，蓝图实现音效 / 特效（未实现时为空操作）
@@ -248,9 +248,11 @@ void ALogSkylineCharacter::DoAttackTrace(FName DamageSourceBone)
 			const FVector Impulse = (Hit.ImpactNormal * -MeleeKnockbackImpulse)
 				+ (FVector::UpVector * MeleeLaunchImpulse);
 
-			Damageable->ApplyDamage(MeleeDamage, this, Hit.ImpactPoint, Impulse);
+			// 按当前连击段取伤害：第 1/2 段 1 点，第 3 段 2 点
+			const float StepDamage = GetDamageForCurrentComboStep();
+			Damageable->ApplyDamage(StepDamage, this, Hit.ImpactPoint, Impulse);
 
-			UE_LOG(LogLogSkyline, Log, TEXT("打击: %s 受到 %.1f 伤害"), *GetNameSafe(HitActor), MeleeDamage);
+			UE_LOG(LogLogSkyline, Log, TEXT("打击: %s 受到 %.1f 伤害"), *GetNameSafe(HitActor), StepDamage);
 		}
 	}
 
@@ -266,9 +268,9 @@ void ALogSkylineCharacter::CheckCombo()
 			CachedAttackInputTime = 0.0f;   // 消费掉，避免同一下被用两次
 			++ComboCount;
 
-			if (ComboCount < ComboSectionNames.Num())
+			if (ComboCount < ComboSteps.Num())
 			{
-				const FName NextSection = ComboSectionNames[ComboCount];
+				const FName NextSection = ComboSteps[ComboCount].SectionName;
 				UE_LOG(LogLogSkyline, Log, TEXT("Combo step %d -> %s"), ComboCount, *NextSection.ToString());
 
 				if (UAnimInstance* AnimInstance = GetMesh()->GetAnimInstance())
@@ -285,5 +287,19 @@ void ALogSkylineCharacter::CheckChargedAttack()
 {
 	// 蓄力攻击暂不使用
 }
+
+
+float ALogSkylineCharacter::GetDamageForCurrentComboStep() const
+{
+	// 正常情况下 ComboCount 就是当前段的索引
+	if (ComboSteps.IsValidIndex(ComboCount))
+	{
+		return ComboSteps[ComboCount].Damage;
+	}
+
+	// 走不到这里才对：连击打完后 ComboCount 会到 3，数组只有三格
+	return MeleeDamage;
+}
+
 
 

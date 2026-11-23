@@ -14,6 +14,20 @@ class UInputAction;
 class UAnimMontage;
 struct FInputActionValue;
 
+USTRUCT(BlueprintType)
+struct FComboStepInfo
+{
+	GENERATED_BODY()
+
+	/** 蒙太奇里的 Section 名。第 0 项是起手段，不参与跳段 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combo")
+	FName SectionName;
+
+	/** 这一段的伤害 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combo", meta = (ClampMin = 0, ClampMax = 100))
+	float Damage = 1.0f;
+};
+
 
 DECLARE_LOG_CATEGORY_EXTERN(LogTemplateCharacter, Log, All);
 
@@ -64,12 +78,14 @@ protected:
 
 	UPROPERTY(EditAnywhere, Category = "Combat|Combo", meta = (ClampMin = 0, ClampMax = 5, Units = "s"))
 	float ComboInputCacheTimeTolerance = 0.45f;   // 连击窗口：按键多久内算有效
-
 	int32 ComboCount = 0;                          // 运行时状态，留 C++ 不暴露
 
 	UPROPERTY(EditAnywhere, Category = "Combat|Combo")
-	TArray<FName> ComboSectionNames = { FName(TEXT("Melee01")), FName(TEXT("Melee02")), FName(TEXT("Melee03")) };
-	// 兜底默认值：C++ 给一份可用的，蓝图面板可覆盖；数组的第 0 项不参与跳段（只用 [1]、[2]）
+	TArray<FComboStepInfo> ComboSteps = {
+		{ FName(TEXT("Melee01")), 1.0f },
+		{ FName(TEXT("Melee02")), 1.0f },
+		{ FName(TEXT("Melee03")), 2.0f }
+	};
 
 	UPROPERTY(EditAnywhere, Category = "Combat|Melee", meta = (ClampMin = 0, ClampMax = 500, Units = "cm"))
 	float MeleeTraceDistance = 75.0f;      // 从手往前扫多远
@@ -115,6 +131,8 @@ protected:
 
 	UFUNCTION(BlueprintImplementableEvent, Category = "Combat", meta = (DisplayName = "On Combo Step"))
 	void BP_OnComboStep(int32 ComboStep);
+
+	float GetDamageForCurrentComboStep() const;
 
 
 public:
