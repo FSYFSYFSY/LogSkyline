@@ -49,9 +49,17 @@ void ACombatDummy::ApplyDamage(float Damage, AActor* DamageCauser, const FVector
 	UE_LOG(LogTemp, Log, TEXT("[Dummy] HP %.0f / %.0f"), CurrentHP, MaxHP);
 
 	// 推血条。MaxHP 允许被配成 0（属性面板 ClampMin=0），先挡一下除零
+	const float LifePercent = MaxHP > 0.0f ? CurrentHP / MaxHP : 0.0f;
+
+	// 懒取：BeginPlay 只是首次尝试，取不到就在这里补一次
+	if (!LifeBarWidget && LifeBar)
+	{
+		LifeBarWidget = Cast<UCombatLifeBar>(LifeBar->GetUserWidgetObject());
+	}
+
 	if (LifeBarWidget)
 	{
-		LifeBarWidget->SetLifePercentage(MaxHP > 0.0f ? CurrentHP / MaxHP : 0.0f);
+		LifeBarWidget->SetLifePercentage(LifePercent);
 	}
 
 	// apply impulse to the dummy
