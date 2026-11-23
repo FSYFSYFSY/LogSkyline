@@ -15,6 +15,9 @@
 #include "Components/SkeletalMeshComponent.h"
 #include "CombatDamageable.h"
 #include "Animation/AnimInstance.h"
+#include "Blueprint/UserWidget.h"
+#include "CombatLifeBar.h"
+#include "Engine/DamageEvents.h"
 
 
 ALogSkylineCharacter::ALogSkylineCharacter()
@@ -299,6 +302,122 @@ float ALogSkylineCharacter::GetDamageForCurrentComboStep() const
 
 	// 走不到这里才对：连击打完后 ComboCount 会到 3，数组只有三格
 	return MeleeDamage;
+}
+
+
+// ============================================================================
+//  血量与受击
+// ============================================================================
+
+void ALogSkylineCharacter::BeginPlay()
+{
+	Super::BeginPlay();
+
+	// 从满血开始
+	CurrentHP = MaxHP;
+
+	// 只有本地玩家才建 HUD：联机时每个客户端都有自己的 PlayerController，但只该建自己那份
+	if (!IsLocallyControlled())
+	{
+		return;
+	}
+
+	if (!HUDWidgetClass)
+	{
+		UE_LOG(LogLogSkyline, Warning, TEXT("[Player] 未配置 HUDWidgetClass，屏幕上看不到血条。去 BP_MyplayerCharacter 的 Class Defaults → Damage → HUD Widget Class 选一个继承 CombatLifeBar 的控件"));
+		return;
+	}
+
+	HUDWidget = CreateWidget<UCombatLifeBar>(GetWorld(), HUDWidgetClass);
+
+	if (HUDWidget)
+	{
+		HUDWidget->AddToViewport();
+		HUDWidget->SetLifePercentage(1.0f);
+	}
+}
+
+float ALogSkylineCharacter::TakeDamage(float DamageAmount, FDamageEvent const& DamageEvent, AController* EventInstigator, AActor* DamageCauser)
+{
+	// 已经死了就不再处理，避免尸体继续掉血、重复触发 HandleDeath
+	if (CurrentHP <= 0.0f)
+	{
+		return 0.0f;
+	}
+
+	// 交给父类：它会按伤害类型做修正，并把 OnTakeAnyDamage 委托广播出去（蓝图里能接）
+	const float ActualDamage = Super::TakeDamage(DamageAmount, DamageEvent, EventInstigator, DamageCauser);
+
+	if (ActualDamage <= 0.0f)
+	{
+		return 0.0f;
+	}
+
+	CurrentHP = FMath::Max(0.0f, CurrentHP - ActualDamage);
+
+	// 血条是 HP 的镜像：HP 变一次就同步一次，这是唯一出口
+	if (HUDWidget)
+	{
+		HUDWidget->SetLifePercentage(MaxHP > 0.0f ? CurrentHP / MaxHP : 0.0f);
+	}
+
+	UE_LOG(LogLogSkyline, Log, TEXT("[Player] HP %.0f / %.0f"), CurrentHP, MaxHP);
+
+	if (CurrentHP <= 0.0f)
+	{
+		HandleDeath();
+	}
+
+	return ActualDamage;
+}
+
+void ALogSkylineCharacter::ApplyDamage(float Damage, AActor* DamageCauser, const FVector& DamageLocation, const FVector& DamageImpulse)
+{
+	// 走引擎标准伤害管线：扣血、更新血条、判定死亡全在 TakeDamage 里统一处理，
+	// 这样以后别人用 UGameplayStatics::ApplyDamage 打玩家也是同一条路径
+	FDamageEvent DamageEvent;
+	const float ActualDamage = TakeDamage(Damage, DamageEvent, nullptr, DamageCauser);
+
+	if (ActualDamage <= 0.0f)
+	{
+		return;
+	}
+
+	// 受击击退。和模板 ACombatCharacter 一致：往 CharacterMovement 上直接加冲量
+	GetCharacterMovement()->AddImpulse(DamageImpulse, true);
+}
+
+void ALogSkylineCharacter::HandleDeath()
+{
+	// 死后不能再走
+	GetCharacterMovement()->DisableMovement();
+
+	// 血条从屏幕上撤掉（保留指针，以后做重生只要重新设回可见）
+	if (HUDWidget)
+	{
+		HUDWidget->SetVisibility(ESlateVisibility::Collapsed);
+	}
+
+	UE_LOG(LogLogSkyline, Log, TEXT("[Player] 已死亡"));
+
+	// 状态改完了，把表现交给蓝图（蓝图没实现就是个空实现，不会崩）
+	BP_OnDeath();
+}
+
+void ALogSkylineCharacter::ApplyHealing(float Healing, AActor* Healer)
+{
+	// 暂不实现治疗
+}
+
+void ALogSkylineCharacter::NotifyDanger(const FVector& DangerLocation, AActor* DangerSource)
+{
+	// 暂不实现受击预警
+}
+
+void ALogSkylineCharacter::DamageSelf(float Amount)
+{
+	// 【临时测试】走和真实受击完全相同的链路，用来验证 HUD
+	ApplyDamage(Amount, this, GetActorLocation() + FVector(0.0f, 0.0f, 50.0f), FVector::ZeroVector);
 }
 
 

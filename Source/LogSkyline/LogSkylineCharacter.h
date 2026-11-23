@@ -6,12 +6,14 @@
 #include "GameFramework/Character.h"
 #include "Logging/LogMacros.h"
 #include "CombatAttacker.h"
+#include "CombatDamageable.h"
 #include "LogSkylineCharacter.generated.h"
 
 class USpringArmComponent;
 class UCameraComponent;
 class UInputAction;
 class UAnimMontage;
+class UCombatLifeBar;
 struct FInputActionValue;
 
 USTRUCT(BlueprintType)
@@ -36,7 +38,7 @@ DECLARE_LOG_CATEGORY_EXTERN(LogTemplateCharacter, Log, All);
  *  Implements a controllable orbiting camera
  */
 UCLASS(abstract)
-class ALogSkylineCharacter : public ACharacter, public ICombatAttacker
+class ALogSkylineCharacter : public ACharacter, public ICombatAttacker, public ICombatDamageable
 {
 	GENERATED_BODY()
 
@@ -102,6 +104,22 @@ protected:
 	UPROPERTY(EditAnywhere, Category = "Combat|Melee", meta = (ClampMin = 0, ClampMax = 1000, Units = "cm/s"))
 	float MeleeLaunchImpulse = 300.0f;     // 上抛力度
 
+	/** 最大血量。和模板 ACombatCharacter 同款，在角色蓝图里配 */
+	UPROPERTY(EditAnywhere, Category = "Damage", meta = (ClampMin = 0, ClampMax = 100))
+	float MaxHP = 5.0f;
+
+	/** 当前血量。运行时由 TakeDamage 修改；蓝图只读，方便 HUD 做低血提示 */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Damage", meta = (AllowPrivateAccess = "true"))
+	float CurrentHP = 0.0f;
+
+	/** 屏幕 HUD 血条的控件类。必须是 UCombatLifeBar 的子类，在角色蓝图的 Class Defaults 里指定 */
+	UPROPERTY(EditDefaultsOnly, Category = "Damage")
+	TSubclassOf<UCombatLifeBar> HUDWidgetClass;
+
+	/** BeginPlay 里创建出来的 HUD 实例。只在运行时存在，不存进资产 */
+	UPROPERTY(Transient)
+	TObjectPtr<UCombatLifeBar> HUDWidget;
+
 
 public:
 
@@ -112,6 +130,9 @@ protected:
 
 	/** Initialize input action bindings */
 	virtual void SetupPlayerInputComponent(class UInputComponent* PlayerInputComponent) override;
+
+	/** 初始化血量，并在本地玩家身上创建 HUD 血条 */
+	virtual void BeginPlay() override;
 
 protected:
 
@@ -167,6 +188,25 @@ public:
 	virtual void CheckCombo() override;
 	virtual void CheckChargedAttack() override;
 	// ~end CombatAttacker interface
+
+public:
+	// ~begin CombatDamageable interface
+	virtual void ApplyDamage(float Damage, AActor* DamageCauser, const FVector& DamageLocation, const FVector& DamageImpulse) override;
+	virtual void HandleDeath() override;
+	virtual void ApplyHealing(float Healing, AActor* Healer) override;
+	virtual void NotifyDanger(const FVector& DangerLocation, AActor* DangerSource) override;
+	// ~end CombatDamageable interface
+
+	/** 死亡时交给蓝图做表现（倒地动画 / 死亡音效 / Game Over）。C++ 只负责状态，表现留给蓝图 */
+	UFUNCTION(BlueprintImplementableEvent, Category = "Combat", meta = (DisplayName = "On Death"))
+	void BP_OnDeath();
+
+	/** 引擎标准伤害入口。ApplyDamage 和 GameplayStatics::ApplyDamage 最终都汇总到这里 */
+	virtual float TakeDamage(float DamageAmount, struct FDamageEvent const& DamageEvent, AController* EventInstigator, AActor* DamageCauser) override;
+
+	/** 【临时测试】PIE 控制台输入 DamageSelf 1 给自己扣血，用来验证 HUD。验证完删掉 */
+	UFUNCTION(Exec)
+	void DamageSelf(float Amount = 1.0f);
 
 };
 
