@@ -9,6 +9,8 @@
 
 class UStaticMeshComponent;
 class UPhysicsConstraintComponent;
+class UWidgetComponent;
+class UCombatLifeBar;
 
 /**
  *  A simple invincible combat training dummy
@@ -33,6 +35,10 @@ class ACombatDummy : public AActor, public ICombatDamageable
 	/** Physics constraint holding the dummy and base plate together */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components", meta = (AllowPrivateAccess = "true"))
 	UPhysicsConstraintComponent* PhysicsConstraint;
+
+	/** 头顶血条组件。和 ACombatCharacter 同款：C++ 只挂空组件，长什么样由蓝图指定 Widget Class */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components", meta = (AllowPrivateAccess = "true"))
+	UWidgetComponent* LifeBar;
 
 public:	
 	
@@ -64,6 +70,10 @@ protected:
 
 	UPROPERTY(VisibleAnywhere, Category = "Damage")
 	float CurrentHP = 0.0f;
+
+	/** BeginPlay 里从 LifeBar 组件解析出的控件实例。运行时才赋值，不需要存进资产 */
+	UPROPERTY(Transient)
+	TObjectPtr<UCombatLifeBar> LifeBarWidget;
 
 	/** Blueprint handle to apply damage effects */
 	UFUNCTION(BlueprintImplementableEvent, Category="Combat", meta = (DisplayName = "On Dummy Damaged"))
