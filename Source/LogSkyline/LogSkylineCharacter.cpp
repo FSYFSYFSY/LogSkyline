@@ -144,6 +144,13 @@ void ALogSkylineCharacter::Look(const FInputActionValue& Value)
 
 void ALogSkylineCharacter::DoMove(float Right, float Forward)
 {
+	// 攻击期间不接受移动输入。空手的动画自带根运动，引擎本来就会丢弃输入；
+	// 刺击没有根运动，只能在这里挡住，否则会出现“边刺边飘”
+	if (bIsAttacking)
+	{
+		return;
+	}
+
 	if (GetController() != nullptr)
 	{
 		// 取控制器朝向，只保留水平分量（Yaw），否则抬头时移动会带向空中
