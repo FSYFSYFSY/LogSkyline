@@ -15,6 +15,7 @@ class UCameraComponent;
 class UInputAction;
 class UAnimMontage;
 class UCombatLifeBar;
+class UStaticMeshComponent;
 struct FInputActionValue;
 
 /**
@@ -66,6 +67,11 @@ private:
 	/** 跟随相机 */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Components", meta = (AllowPrivateAccess = "true"))
 	UCameraComponent* FollowCamera;
+
+	/** 剑的静态网格体。初始挂在骨架的 weapon_back socket 上，拔剑时由 C++ 切到 weapon_r。
+	 *  用哪个网格体在角色蓝图的组件详情里指定 */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Combat|Weapon", meta = (AllowPrivateAccess = "true"))
+	TObjectPtr<UStaticMeshComponent> SwordMesh;
 
 protected:
 

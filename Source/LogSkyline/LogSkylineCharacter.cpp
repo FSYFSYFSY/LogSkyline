@@ -13,6 +13,7 @@
 #include "InputActionValue.h"
 #include "LogSkyline.h"
 #include "Components/SkeletalMeshComponent.h"
+#include "Components/StaticMeshComponent.h"
 #include "CombatDamageable.h"
 #include "Animation/AnimInstance.h"
 #include "Blueprint/UserWidget.h"
@@ -61,6 +62,16 @@ ALogSkylineCharacter::ALogSkylineCharacter()
 	FollowCamera = CreateDefaultSubobject<UCameraComponent>(TEXT("FollowCamera"));
 	FollowCamera->SetupAttachment(CameraBoom, USpringArmComponent::SocketName);
 	FollowCamera->bUsePawnControlRotation = false;
+
+	// 剑：初始挂到骨架的 weapon_back socket 上（就是 spine_03 上那个“剑鞘”挂点）。
+	// socket 名写错不会报错，剑会静默落到 Mesh 原点（角色脚下）——看到剑在脚底先回来查名字
+	SwordMesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("SwordMesh"));
+	SwordMesh->SetupAttachment(GetMesh(), TEXT("weapon_back"));
+
+	// 剑不参与碰撞：它比胶囊体长得多，开碰撞会卡住角色自己的移动、贴着墙把自己顶出去，
+	// 还可能被近战扫掠当成敌人命中。打击判定只靠手骨扫掠，不需要剑身碰撞
+	SwordMesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	SwordMesh->SetGenerateOverlapEvents(false);
 
 	// 提示：骨骼网格体和动画蓝图在派生的角色蓝图里指定，避免 C++ 里硬引用资产
 }
